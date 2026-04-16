@@ -72,7 +72,7 @@ static int copy_from_mrd(struct bio_vec *bvec, struct mrd_device *mrd, loff_t of
 
     pr_info("my_ramdisk: copy_from_mrd (offset = %llu)\n", offset);
 
-    retour = kernel_read(mrd->fichier_temp, temp_buff, bvec->bv_len, &offset);
+    retour = kernel_read(mrd->fichier_tmp, temp_buff, bvec->bv_len, &offset);
     if (retour < 0) {
         pr_err("Erreur lors du read sur le fichier\n");
         kfree(temp_buff);
@@ -211,6 +211,7 @@ MODULE_ALIAS("my_ramdisk");
 
 static struct mrd_device *mrd;
 
+
 static int mrd_alloc(void)
 {
 	struct gendisk *disk;
@@ -226,14 +227,20 @@ static int mrd_alloc(void)
 	snprintf(buf, DISK_NAME_LEN, "my_ram");
 
 	// la a la base c'est un allocation nous on dire comme le TP d'ouvrir juste le fichier
-	mrd->data = vmalloc(mrd_size * 1024);
-	if (!mrd->data) {
-		pr_err("my_ramdisk: not enough memory for ramdisk\n");
-		err = -ENOMEM;
+	// mrd->data = vmalloc(mrd_size * 1024);
+	// if (!mrd->data) {
+	// 	pr_err("my_ramdisk: not enough memory for ramdisk\n");
+	// 	err = -ENOMEM;
+	// 	goto out_free_dev;
+	// }
+
+	mrd->fichier_tmp = filp_open("/tmp/crazy_files", O_CREAT | O_RDWR, 0644);
+	
+	if(IS_ERR(mrd->fichier_tmp)){
+		pr_err("probleme lors de l'ouvert de crazy_files\n ");
+		err = PTR_ERR(mrd->fichier_tmp);
 		goto out_free_dev;
 	}
-
-	// mdr->ficher_temp = 
 
 	mrd->capacity = mrd_size * 2;
 	memset(&mrd->tag_set, 0, sizeof(mrd->tag_set));
@@ -246,7 +253,7 @@ static int mrd_alloc(void)
 	mrd->tag_set.nr_hw_queues = 1;
 	err = blk_mq_alloc_tag_set(&mrd->tag_set);
 	if (err) {
-		goto out_free_data;
+		goto out_free_data; // on retire ca non ? 
 	}
 
 	struct queue_limits lim = {
@@ -287,7 +294,7 @@ out_cleanup_disk:
 out_free_tagset:
 	blk_mq_free_tag_set(&mrd->tag_set);
 out_free_data:
-	vfree(mrd->data);
+	// vfree(mrd->data);
 out_free_dev:
 	kfree(mrd);
 out:
@@ -298,7 +305,10 @@ static void mrd_cleanup(void)
 {
 	del_gendisk(mrd->mrd_disk);
 	put_disk(mrd->mrd_disk);
-	vfree(mrd->data);
+	// vfree(mrd->data);
+	if (mrd->fichier_tmp) {
+        filp_close(mrd->fichier_tmp, NULL);
+    }
 	kfree(mrd);
 }
 
