@@ -18,7 +18,7 @@ struct mrd_device {
 	struct blk_mq_tag_set   tag_set;
   // les donnees...
 	// void                    *data;
-	struct * file fichier_tmp;
+	struct file * fichier_tmp;
 };
 
 //cette fonction copier vers my ram disk device, elle va prendre le device vers le quelle elle va copier
@@ -33,7 +33,7 @@ static int copy_to_mrd(struct mrd_device *mrd, struct bio_vec *bvec,
 	int retour ;
 	void * temp_buff = kmalloc(bvec->bv_len, GFP_KERNEL);
 	if (!temp_buff) {
-		pr_erreur("erreur allocation kmalloc copy_to_mdr\n");
+		pr_err("erreur allocation kmalloc copy_to_mdr\n");
 		return -ENOMEM;
 	}
 
@@ -44,11 +44,13 @@ static int copy_to_mrd(struct mrd_device *mrd, struct bio_vec *bvec,
 	// memcpy_from_bvec(mrd->data + offset, bvec);
 
 	memcpy_from_bvec(temp_buff, bvec); //voir si on test des retours sur ca
-
-	retour = kernel_write(mrd->fichier-tmp, temp_buff,bvec->bv_len, &offset); //caster en int ?
+	// faire le chiffrement ici non vant de mettre dans buff?
+	// le chiffrement c'est ici pour pas modier le bvec directement c'est un ptr
+	
+	retour = kernel_write(mrd->fichier_tmp, temp_buff,bvec->bv_len, &offset); //caster en int ?
 	if (retour < 0){
 		//ya une erreur
-		pr_erreur("Erreur lors du write sur le ficher\n");
+		pr_err("Erreur lors du write sur le ficher\n");
 		kfree(temp_buff);
 		return retour;
 	}
@@ -70,19 +72,19 @@ static int copy_from_mrd(struct bio_vec *bvec, struct mrd_device *mrd, loff_t of
 
     pr_info("my_ramdisk: copy_from_mrd (offset = %llu)\n", offset);
 
-    retour = kernel_read(mrd->backing_file, temp_buff, bvec->bv_len, &offset);
+    retour = kernel_read(mrd->fichier_temp, temp_buff, bvec->bv_len, &offset);
     if (retour < 0) {
         pr_err("Erreur lors du read sur le fichier\n");
         kfree(temp_buff);
         return retour;
     }
-
+	//faire le dechiffrement ici non ?avant de mettre dans bvec (pour l'utilisateur) ?
     memcpy_to_bvec(bvec, temp_buff);
     kfree(temp_buff);
     return 0;
 }
 
-
+// c'est ce qui permet au disk de savoir ce qu'il doit faire R ou W 
 static int mrd_do_bvec(struct mrd_device *mrd, struct bio_vec *bvec,
 		enum req_op op, loff_t offset)
 {
@@ -100,9 +102,10 @@ static int mrd_do_bvec(struct mrd_device *mrd, struct bio_vec *bvec,
 
 	return err;
 }
+
 // my ram disk request worker
 // cette structure c'est quand on demande un truc a faire au module de lire (request)
-// le ficher j'imagine (mdr) et le worker s'en occupe quand le kernel le veut
+// le ficher j'imagine c'est mdr et le worker s'en occupe quand le kernel le veut
 struct mrd_rq_worker {
 	// strcut standard de linux pour les workers
 	struct work_struct work; 
@@ -222,12 +225,15 @@ static int mrd_alloc(void)
 
 	snprintf(buf, DISK_NAME_LEN, "my_ram");
 
+	// la a la base c'est un allocation nous on dire comme le TP d'ouvrir juste le fichier
 	mrd->data = vmalloc(mrd_size * 1024);
 	if (!mrd->data) {
 		pr_err("my_ramdisk: not enough memory for ramdisk\n");
 		err = -ENOMEM;
 		goto out_free_dev;
 	}
+
+	// mdr->ficher_temp = 
 
 	mrd->capacity = mrd_size * 2;
 	memset(&mrd->tag_set, 0, sizeof(mrd->tag_set));
