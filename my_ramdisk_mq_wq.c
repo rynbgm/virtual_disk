@@ -62,8 +62,8 @@ static int copy_to_mrd(struct mrd_device *mrd, struct bio_vec *bvec,
 // un peu la meme explication qu'en haut mais en gros c'est pour copier depuis le ficher vers le buffer (le bio vecteur la)
 static int copy_from_mrd(struct bio_vec *bvec, struct mrd_device *mrd, loff_t offset)
 {
+	//test
     ssize_t retour;
-
     void *temp_buff = kmalloc(bvec->bv_len, GFP_KERNEL);
     if (!temp_buff) {
         pr_err("Erreur allocation kmalloc copy_from_mrd\n");
